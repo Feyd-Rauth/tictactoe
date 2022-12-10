@@ -4,12 +4,13 @@ pragma solidity >=0.7.0 <0.9.0;
 
 contract TicTacToe {
 
-    uint256 constant fee = 100000 gwei; // ~ 7 RUB per bet
+    uint256 constant fee = 1 gwei;
 
     // PlayerTypes enumerates all possible players
     enum PlayerTypes { None, PlayerOne, PlayerTwo }
     // Winners enumerates all possible winner
     enum Winners { None, PlayerOne, PlayerTwo, Draw }
+    enum Status { NotStarted, InProgress, Finished }
 
     struct Player {
         address addr;
@@ -18,9 +19,11 @@ contract TicTacToe {
 
     struct Game {
         uint256 totalBet;
+        uint256 required_bet;
         Player playerOne;
         Player playerTwo;
         Winners winner;
+        Status status;
         PlayerTypes playerTurn;
         PlayerTypes[3][3] board;
     }
@@ -31,7 +34,7 @@ contract TicTacToe {
     // are known to be the integers from `1` to `numberOfGames`.
     mapping(uint256 => Game) private games;
     // numberOfGames stores the total number of games in this contract.
-    uint256 private numberOfGames;
+    uint256 public numberOfGames;
 
     // GameCreated signals that `creator` created a new game with this `gameId`.
     event GameCreated(uint256 gameId, address creator);
@@ -47,9 +50,12 @@ contract TicTacToe {
 
     // newGame creates a new game and returns the new game's `gameId`.
     // The `gameId` is required in subsequent calls to identify the game.
-    function newGame() public returns (uint256 gameId) {
+    function newGame(uint256 _required_bet) public returns (uint256 gameId) {
+        require(_required_bet > fee, "required_bet is too low");
         Game memory game;
         game.playerTurn = PlayerTypes.PlayerOne;
+        game.status = Status.NotStarted;
+        game.required_bet = _required_bet;
 
         numberOfGames++;
         games[numberOfGames] = game;
@@ -59,16 +65,28 @@ contract TicTacToe {
         return numberOfGames;
     }
 
+    function getGameInfo(uint256 _gameId) public view returns(Game memory game) {
+        game = games[_gameId];
+    }
+
     // joinGame lets the sender of the message join the game with the id `gameId`.
     // It returns `success = true` when joining the game was possible and
     // `false` otherwise.
     // `reason` indicates why a game was joined or not joined.
-    function joinGame(uint256 _gameId) public payable returns (bool success, string memory reason) {
-        if (msg.value <= fee) {
+    function joinGame(uint256 _gameId) public payable {
+        bool success;
+        string memory reason;
+
+        (success, reason) = _joinGame(msg.value, _gameId);
+        require(success, reason);
+    }
+
+    function _joinGame(uint256 _value, uint256 _gameId) private returns (bool success, string memory reason) {
+        if (_value <= fee) {
             return (false, "Bet should be greater than a fee.");
         }
 
-        if (msg.value == 0) {
+        if (_value == 0) {
             return (false, "No eth stacked.");
         }
 
@@ -76,25 +94,27 @@ contract TicTacToe {
             return (false, "No such game exists.");
         }
 
-        Player memory player = Player(msg.sender, msg.value - fee);
+        Player memory player = Player(msg.sender, _value - fee);
         Game storage game = games[_gameId];
+        require(_value == game.required_bet, "invalid bet amount");
 
         // Assign the new player to slot 1 if it is still available.
         if (game.playerOne.addr == address(0)) {
             game.playerOne = player;
-            game.totalBet += msg.value - fee;
+            game.totalBet += _value - fee;
             emit PlayerJoinedGame(_gameId, player, uint8(PlayerTypes.PlayerOne));
 
-            return (true, "Joined as player one.");
+            return (true, "");
         }
 
         // If slot 1 is taken, assign the new player to slot 2 if it is still available.
         if (game.playerTwo.addr == address(0)) {
+            require(game.playerOne.addr != msg.sender);
             game.playerTwo = player;
-            game.totalBet += msg.value - fee;
+            game.totalBet += _value - fee;
             emit PlayerJoinedGame(_gameId, player, uint8(PlayerTypes.PlayerTwo));
-
-            return (true, "Joined as player two. Player one can make the first move.");
+            game.status = Status.InProgress;
+            return (true, "");
         }
 
         return (false, "All seats taken.");
@@ -102,14 +122,24 @@ contract TicTacToe {
 
     // makeMove inserts a player on the game board.
     // The player is identified as the sender of the message.
-    function makeMove(uint256 _gameId, uint _xCoordinate, uint _yCoordinate) public returns (bool success, string memory reason) {
+    function makeMove(uint256 _gameId, uint _xCoordinate, uint _yCoordinate) public  {
+        bool success;
+        string memory reason;
+        (success, reason) = _makeMove(_gameId, _xCoordinate, _yCoordinate);
+        require(success, reason);
+    }
+    
+    function _makeMove(uint256 _gameId, uint _xCoordinate, uint _yCoordinate) public returns (bool success, string memory reason) {
         if (_gameId > numberOfGames) {
             return (false, "No such game exists.");
         }
 
         Game storage game = games[_gameId];
-        Player memory player = getCurrentPlayer(game);
+        if (game.status != Status.InProgress) {
+            return (false, "Game is not in progress");
+        }
 
+        Player memory player = getCurrentPlayer(game);
         if (player.addr == address(0)) {
             return(false, "Current player not found.");
         }
@@ -138,11 +168,12 @@ contract TicTacToe {
             // If there is a winner (can be a `Draw`) it must be recorded in the game and
             // the corresponding event must be emitted.
             game.winner = winner;
+            game.status = Status.Finished;
 
             if (winner == Winners.Draw) {
                 (bool sent, bytes memory data) = payable(game.playerOne.addr).call{value: game.playerOne.bet}("");
                 require(sent, "Failed to send Ether");
-                
+
                 (sent, data) = payable(game.playerTwo.addr).call{value: game.playerTwo.bet}("");
                 require(sent, "Failed to send Ether");
     
@@ -154,7 +185,7 @@ contract TicTacToe {
 
             emit GameOver(_gameId, winner);
 
-            return (true, "The game is over.");
+            return (true, "");
         }
 
         // A move was made and there is no winner yet.
