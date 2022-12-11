@@ -1,17 +1,6 @@
 import { useEffect, useState } from 'react';
 import React from 'react'
 import {
-    Table,
-    Thead,
-    Tbody,
-    Tfoot,
-    Tr,
-    Th,
-    Td,
-    TableCaption,
-    TableContainer,
-    Wrap,
-    Text,
     Card,
     CardBody,
     Box,
@@ -40,16 +29,24 @@ const mark = (playerNumber) => {
 
 const turn = (playerTurn, playerNumber) => {
     if (playerTurn != 1 && playerTurn != 2) {
-        return "Invalid player turn" 
+        return [false, "Invalid player turn"]
     } else if (playerNumber == playerTurn) {
-        return "It's your turn"
+        return [true, "It's your turn"]
     } else {
-        return "Waiting for opponent's move"
+        return [false, "Waiting for opponent's move"]
     }
 }
 
 const GameInfo = ({game, gameId, playerNumber, account}) => {
     const opponent = game.playerOne.addr.toLowerCase() === account.toLowerCase() ? game.playerTwo.addr : game.playerOne.addr;
+    const [myTurn, setMyTrun] = useState(false);
+    const [turnText, setTurnText] = useState("");
+
+    useEffect(() => {
+        const [myTurn, turnText] = turn(game.playerTurn, playerNumber)
+        setMyTrun(myTurn)
+        setTurnText(turnText)
+    }, [game])
     
     return (
         <Box>
@@ -69,8 +66,8 @@ const GameInfo = ({game, gameId, playerNumber, account}) => {
                 <Card size='sm'>
                     <CardBody>You are player #{playerNumber}, your mark is {mark(playerNumber)}</CardBody>
                 </Card>
-                <Card size='sm'>
-                    <CardBody>{turn(game.playerTurn, playerNumber)}</CardBody>
+                <Card size='sm' background={myTurn ? 'yellow.100' : ''}>
+                    <CardBody >{turnText}</CardBody>
                 </Card>
             </Stack>
         </Box>

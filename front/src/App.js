@@ -6,6 +6,8 @@ import { Input, Flex, InputGroup, InputRightElement, Button, ButtonGroup, Stack,
 import { CHAIN_ID, CONTACT_ABI, CONTACT_ADDRESS } from './config';
 import Game from './components/Game';
 import GameInfo from './components/GameInfo';
+import GamesList from './components/GamesList';
+import { extractMessageFromError } from './utils';
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
@@ -26,6 +28,9 @@ function App() {
   const [contract, setContract] = useState(); 
   const [loadingTx, setLoadingTx] = useState(false);
   const toast = useToast()
+
+  const [finished, setFinished] = useState(false);
+
 
   useEffect(() => {
     if(window.ethereum) {
@@ -68,7 +73,6 @@ function App() {
         from: account
       });
       setContract(contract);
-      console.log(contract.methods)
     }
 
     load();
@@ -80,10 +84,8 @@ function App() {
   
 
   async function updateGame() {
-    console.log('update game with id: ', gameId)
     if (gameId !== undefined) {
       const newGame = await contract.methods.getGameInfo(gameId).call();
-      console.log("new game:", newGame);
       setGame(newGame)
     }
   }
@@ -105,16 +107,56 @@ function App() {
         free += 1
       }
       setGameFreePlaces(free)
+      let playNumber = 0
+      if (game.playerOne.addr.toLowerCase() == account.toLowerCase()) {
+        playNumber = 1
+      } else if (game.playerTwo.addr.toLowerCase() == account.toLowerCase()) {
+        playNumber = 2
+      }
+      setPlayerNumber(playNumber)
 
-      if (game.playerOne.addr == account) {
-        setPlayerNumber(1)
-      } else if (game.playerTwo.addr == account) {
-        setPlayerNumber(2)
-      } else {
-        setPlayerNumber(0)
+      let over = game.status == 2;
+      if (over && !finished) {
+        let winner = game.winner
+        // win
+        if (playerNumber != 0) {
+          setFinished(true)
+          if (winner == playerNumber) {
+            toast({
+              title: 'You win!',
+              position: 'top',
+              status: 'success',
+              isClosable: true,
+              duration: 20000,
+              description: ':)'
+              
+            })
+          // draw
+          } else if (winner == 3) {
+            toast({
+              title: 'Draw!',
+              position: 'top',
+              status: 'warning',
+              isClosable: true,
+              duration: 20000,
+              description: ':/'
+            })
+          // lose
+          } else {
+            toast({
+              title: 'You lose',
+              position: 'top',
+              status: 'error',
+              isClosable: true,
+              duration: 20000,
+              description: ':('
+            })
+          }
+        }
+
       }
     }
-  }, [game])
+  }, [game, account])
 
   const handleBoardMove = async (move) => {
     let x = Math.floor(move / 3)
@@ -126,40 +168,7 @@ function App() {
       .then(() => {
         method.send({from: account})
         .on('receipt', function(receipt) {
-          let over = receipt.events.GameOver;
-          if (over) {
-            let winner = over.returnValues.winner
-            if (winner == playerNumber) {
-              toast({
-                title: 'You win!',
-                position: 'top',
-                status: 'success',
-                isClosable: true,
-                duration: 20000,
-                description: ':)'
-                
-              })
-            // draw
-            } else if (winner == 3) {
-              toast({
-                title: 'Draw!',
-                position: 'top',
-                status: 'warning',
-                isClosable: true,
-                duration: 20000,
-                description: ':/'
-              })
-            } else {
-              toast({
-                title: 'You lose',
-                position: 'top',
-                status: 'warning',
-                isClosable: true,
-                duration: 20000,
-                description: ':('
-              })
-            }
-          }
+          updateGame()
         })
       })
       .catch((error) => {
@@ -167,7 +176,7 @@ function App() {
             title: 'Invalid move',
             position: 'top',
             status: 'error',
-            description: error.message,
+            description: extractMessageFromError(error.message),
             isClosable: true,
         })
       })
@@ -205,7 +214,6 @@ function App() {
 
   const handleUpdateGame = async (e) => {
     e.preventDefault()
-    console.log("UPDATE GAME", e)
   }
   
   const handleJoinGame = async (e) => {
@@ -275,8 +283,9 @@ function App() {
               />
               
               <Button colorScheme='twitter' ml={2} w="8rem" onClick={handleContinueGame} isLoading={loadingTx}>Join</Button>
-              
             </InputGroup>
+            <Text align="center">List of avaliable games:</Text>
+            <GamesList contract={contract}/>
           </Stack>
         }
         

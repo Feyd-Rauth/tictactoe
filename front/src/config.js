@@ -1,6 +1,6 @@
 export const CONTACT_ADDRESS = '0xb12378cddf6a78b04e7ef47c9c93d6c51d091079';
 //export const CHAIN_ID = 1001
-export const CHAIN_ID = 1337
+export const CHAIN_ID = 1338
 
 
 export const CONTACT_ABI = [
