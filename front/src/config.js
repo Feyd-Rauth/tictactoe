@@ -1,6 +1,6 @@
-export const CONTACT_ADDRESS = '0xb12378cddf6a78b04e7ef47c9c93d6c51d091079';
-//export const CHAIN_ID = 1001
-export const CHAIN_ID = 1338
+const PROD = process.env.REACT_APP_PROD == 'true'
+export const CONTACT_ADDRESS = PROD ? '0x9d4eC135d5917Bb4FFa40E005F64f0410F3c5940' : '0xb12378cddf6a78b04e7ef47c9c93d6c51d091079';
+export const CHAIN_ID = PROD ? 1001 : 1338;
 
 
 export const CONTACT_ABI = [
