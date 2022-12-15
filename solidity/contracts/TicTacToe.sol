@@ -6,9 +6,7 @@ contract TicTacToe {
 
     uint256 constant fee = 1 gwei;
 
-    // PlayerTypes enumerates all possible players
     enum PlayerTypes { None, PlayerOne, PlayerTwo }
-    // Winners enumerates all possible winner
     enum Winners { None, PlayerOne, PlayerTwo, Draw }
     enum Status { NotStarted, InProgress, Finished }
 
@@ -94,7 +92,7 @@ contract TicTacToe {
 
             return (true, "");
         }
-.
+
         if (game.playerTwo.addr == address(0)) {
             require(game.playerOne.addr != msg.sender);
             game.playerTwo = player;
